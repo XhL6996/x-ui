@@ -17,13 +17,12 @@ const VmessMethods = {
 };
 
 const SSMethods = {
-    // AES_256_CFB: 'aes-256-cfb',
-    // AES_128_CFB: 'aes-128-cfb',
-    // CHACHA20: 'chacha20',
-    // CHACHA20_IETF: 'chacha20-ietf',
-    CHACHA20_POLY1305: 'chacha20-poly1305',
-    AES_256_GCM: 'aes-256-gcm',
     AES_128_GCM: 'aes-128-gcm',
+    AES_256_GCM: 'aes-256-gcm',
+    CHACHA20_POLY1305: 'chacha20-poly1305',
+    BLAKE3_AES_128_GCM_2022: "2022-blake3-aes-128-gcm",
+    BLAKE3_AES_256_GCM_2022: "2022-blake3-aes-256-gcm",
+    BLAKE3_CHACHA20_POLY1305_2022: "2022-blake3-chacha20-poly1305",
 };
 
 const RULE_IP = {
@@ -1359,13 +1358,15 @@ Inbound.TrojanSettings.Fallback = class extends XrayCommonClass {
 };
 
 Inbound.ShadowsocksSettings = class extends Inbound.Settings {
+    methodBackup = "";
     constructor(protocol,
                 method=SSMethods.AES_256_GCM,
-                password=RandomUtil.randomSeq(10),
+                password=Inbound.ShadowsocksSettings.randomSSPassword(method),
                 network='tcp,udp'
     ) {
         super(protocol);
         this.method = method;
+        this.methodBackup = method;
         this.password = password;
         this.network = network;
     }
@@ -1385,6 +1386,44 @@ Inbound.ShadowsocksSettings = class extends Inbound.Settings {
             password: this.password,
             network: this.network,
         };
+    }
+
+    methodChanged(method){
+        let oldStatus = 0;
+        let newStatus = 0;
+        switch (this.methodBackup){
+            case SSMethods.BLAKE3_AES_128_GCM_2022:
+                oldStatus = 1;
+                break;
+            case SSMethods.BLAKE3_AES_256_GCM_2022:
+            case SSMethods.BLAKE3_CHACHA20_POLY1305_2022:
+                oldStatus = 2;
+        }
+        switch (method){
+            case SSMethods.BLAKE3_AES_128_GCM_2022:
+                newStatus = 1;
+                break;
+            case SSMethods.BLAKE3_AES_256_GCM_2022:
+            case SSMethods.BLAKE3_CHACHA20_POLY1305_2022:
+                newStatus = 2;
+        }
+
+        if(oldStatus !== newStatus){
+            this.methodBackup = method;
+            this.password = Inbound.ShadowsocksSettings.randomSSPassword(method);
+        }
+    }
+
+    static randomSSPassword(method) {
+        switch (method) {
+            case SSMethods.BLAKE3_AES_256_GCM_2022:
+            case SSMethods.BLAKE3_CHACHA20_POLY1305_2022:
+                return RandomUtil.randomSeq(43) + "=";
+            case SSMethods.BLAKE3_AES_128_GCM_2022:
+                return RandomUtil.randomSeq(22) + "==";
+            default:
+                return RandomUtil.randomSeq(10);
+        }
     }
 };
 
